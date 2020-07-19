@@ -18,8 +18,8 @@ namespace MappingGenerator.Mappings.MappingImplementors
             SemanticModel semanticModel, MappingContext mappingContext)
         {
             var mappingEngine = new MappingEngine(semanticModel, generator);
-            var source = methodSymbol.Parameters[0];
-            var sourceFinder = new ObjectMembersMappingSourceFinder(source.Type, generator.IdentifierName(source.Name), generator);
+            var sourceParameter = methodSymbol.Parameters[0];
+            var sourceFinder = new ObjectMembersMappingSourceFinder(sourceParameter.Type, generator.IdentifierName(sourceParameter.Name), generator, sourceParameter.CanBeNull());
             var targets = MappingTargetHelper.GetFieldsThaCanBeSetFromConstructor(methodSymbol.ContainingType, mappingContext);
             return mappingEngine.MapUsingSimpleAssignment(targets, new SingleSourceMatcher(sourceFinder), mappingContext);
         }

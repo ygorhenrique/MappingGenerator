@@ -32,8 +32,7 @@ namespace MappingGenerator.Mappings.SourceFinders
             this.localSymbols = localSymbols;
         }
 
-        public MappingElement FindMappingSource(string targetName, ITypeSymbol targetType,
-            MappingContext mappingContext)
+        public MappingElement FindMappingSource(string targetName, AnnotatedType targetType, MappingContext mappingContext)
         {
             var candidate= localSymbols.FirstOrDefault(x => x.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase));
             if (candidate != null)

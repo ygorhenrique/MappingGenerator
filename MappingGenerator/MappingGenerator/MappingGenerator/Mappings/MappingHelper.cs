@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using MappingGenerator.Features.Refactorings;
+using MappingGenerator.Mappings.SourceFinders;
 using MappingGenerator.RoslynHelpers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -21,7 +22,7 @@ namespace MappingGenerator.Mappings
             return typeSymbol.Kind == SymbolKind.ArrayType  || ObjectHelper.HasInterface(typeSymbol, "System.Collections.IEnumerable");
         }
 
-        public static ITypeSymbol GetElementType(ITypeSymbol collectionType)
+        public static AnnotatedType GetElementType(ITypeSymbol collectionType)
         {
             switch (collectionType)
             {
@@ -33,20 +34,32 @@ namespace MappingGenerator.Mappings
                             var indexer = namedType.GetMembers(WellKnownMemberNames.Indexer).OfType<IPropertySymbol>().FirstOrDefault();
                             if (indexer != null)
                             {
-                               return indexer.Type;
+                               return  new AnnotatedType()
+                               {
+                                   Type = indexer.Type,
+                                   CanBeNull = indexer.CanBeNull()
+                               };
                             }
 
                             throw new NotSupportedException("Cannot determine collection element type");
                         }
                         if (ObjectHelper.IsSystemObject(namedType.BaseType))
                         {
-                            return namedType.BaseType;
+                            return new AnnotatedType(){Type = namedType.BaseType , CanBeNull = true};
                         }
                         return GetElementType(namedType.BaseType);
                     }
-                    return namedType.TypeArguments[0];
+                    return new AnnotatedType()
+                    {
+                        Type = namedType.TypeArguments[0],
+                        CanBeNull = namedType.TypeParameterCanBeNull(1)
+                    };
                 case IArrayTypeSymbol arrayType:
-                    return arrayType.ElementType;
+                    return new AnnotatedType()
+                    {
+                        Type = arrayType.ElementType,
+                        CanBeNull = arrayType.ElementCanBeNull()
+                    };
                 default:
                     throw new NotSupportedException("Unknown collection type");
             }

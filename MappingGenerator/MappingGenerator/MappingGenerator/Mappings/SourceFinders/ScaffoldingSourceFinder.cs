@@ -19,17 +19,17 @@ namespace MappingGenerator.Mappings.SourceFinders
             _document = document;
         }
 
-        public MappingElement FindMappingSource(string targetName, ITypeSymbol targetType, MappingContext mappingContext)
+        public MappingElement FindMappingSource(string targetName, AnnotatedType targetType, MappingContext mappingContext)
         {
             return FindMappingSource(targetType, mappingContext, new MappingPath());
         }
 
-        private MappingElement FindMappingSource(ITypeSymbol targetType, MappingContext mappingContext, MappingPath mappingPath)
+        private MappingElement FindMappingSource(AnnotatedType targetType, MappingContext mappingContext, MappingPath mappingPath)
         {
             return new MappingElement
             {
                 ExpressionType = targetType,
-                Expression = (ExpressionSyntax) GetDefaultExpression(targetType, mappingContext, mappingPath)
+                Expression = (ExpressionSyntax) GetDefaultExpression(targetType.Type, mappingContext, mappingPath)
             };  
         }
 
@@ -89,7 +89,7 @@ namespace MappingGenerator.Mappings.SourceFinders
                     }
                     var subType = MappingHelper.GetElementType(type);
                     var initializationBlockExpressions = new SeparatedSyntaxList<ExpressionSyntax>();
-                    var subTypeDefault = (ExpressionSyntax)GetDefaultExpression(subType, mappingContext, mappingPath.Clone());
+                    var subTypeDefault = (ExpressionSyntax)GetDefaultExpression(subType.Type, mappingContext, mappingPath.Clone());
                     if (subTypeDefault != null)
                     {
                         initializationBlockExpressions = initializationBlockExpressions.Add(subTypeDefault);
@@ -157,7 +157,7 @@ namespace MappingGenerator.Mappings.SourceFinders
                     var assignments = fields.Select(x =>
                     {
                         var identifier = (ExpressionSyntax)(SyntaxFactory.IdentifierName(x.Name));
-                        return (ExpressionSyntax)syntaxGenerator.AssignmentStatement(identifier, this.FindMappingSource(x.Type, mappingContext, mappingPath.Clone()).Expression);
+                        return (ExpressionSyntax)syntaxGenerator.AssignmentStatement(identifier, this.FindMappingSource(new AnnotatedType(){Type = x.Type, CanBeNull = x.CanBeNull}, mappingContext, mappingPath.Clone()).Expression);
                     }).ToList();
 
                     if (assignments.Count == 0)

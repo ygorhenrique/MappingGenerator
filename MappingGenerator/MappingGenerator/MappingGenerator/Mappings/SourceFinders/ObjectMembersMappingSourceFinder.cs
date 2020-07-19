@@ -12,7 +12,16 @@ namespace MappingGenerator.Mappings.SourceFinders
 {
     public interface IMappingSourceFinder
     {
-        MappingElement FindMappingSource(string targetName, ITypeSymbol targetType, MappingContext mappingContext);
+        MappingElement FindMappingSource(string targetName, AnnotatedType targetType, MappingContext mappingContext);
+    }
+
+    public class SyntaxFactoryExtensions
+    {
+        public static MemberAccessExpressionSyntax CreateMemberAccessExpression(ExpressionSyntax expressionSyntax, bool isExpressionNullable, string memberName)
+        {
+            var type = isExpressionNullable ? SyntaxKind.ConditionalAccessExpression: SyntaxKind.SimpleMemberAccessExpression;
+            return SyntaxFactory.MemberAccessExpression(type, expressionSyntax, SyntaxFactory.IdentifierName(memberName));
+        }
     }
 
     public class ObjectMembersMappingSourceFinder : IMappingSourceFinder
@@ -20,17 +29,19 @@ namespace MappingGenerator.Mappings.SourceFinders
         private readonly ITypeSymbol sourceType;
         private readonly SyntaxNode sourceGlobalAccessor;
         private readonly SyntaxGenerator generator;
+        private readonly bool isGlobalAccessorNullable;
         private readonly Lazy<IReadOnlyList<IObjectField>> sourceProperties;
         private readonly Lazy<IReadOnlyList<IMethodSymbol>> sourceMethods;
         private readonly string potentialPrefix;
         private readonly Lazy<bool> isSourceTypeEnumerable;
 
 
-        public ObjectMembersMappingSourceFinder(ITypeSymbol sourceType, SyntaxNode sourceGlobalAccessor, SyntaxGenerator generator)
+        public ObjectMembersMappingSourceFinder(ITypeSymbol sourceType, SyntaxNode sourceGlobalAccessor, SyntaxGenerator generator, bool isGlobalAccessorNullable)
         {
             this.sourceType = sourceType;
             this.sourceGlobalAccessor = sourceGlobalAccessor;
             this.generator = generator;
+            this.isGlobalAccessorNullable = isGlobalAccessorNullable;
             this.potentialPrefix = NameHelper.ToLocalVariableName(sourceGlobalAccessor.ToFullString());
             var sourceAllMembers = sourceType.GetAllMembers();
             this.sourceProperties = new Lazy<IReadOnlyList<IObjectField>>(() =>ObjectFieldExtensions.GetObjectFields(sourceAllMembers).ToList());
@@ -38,9 +49,9 @@ namespace MappingGenerator.Mappings.SourceFinders
             this.isSourceTypeEnumerable = new Lazy<bool>(() => sourceType.Interfaces.Any(x => x.ToDisplayString().StartsWith("System.Collections.Generic.IEnumerable<")));
         }
 
-        public MappingElement FindMappingSource(string targetName, ITypeSymbol targetType, MappingContext mappingContext)
+        public MappingElement FindMappingSource(string targetName, AnnotatedType targetType, MappingContext mappingContext)
         {
-            return TryFindSource(targetName, mappingContext, sourceType) ?? TryFindSourceForEnumerable(targetName, targetType);
+            return TryFindSource(targetName, mappingContext, sourceType) ?? TryFindSourceForEnumerable(targetName, targetType.Type);
         }
 
 
@@ -65,11 +76,15 @@ namespace MappingGenerator.Mappings.SourceFinders
 
         private MappingElement CreateMappingElementFromExtensionMethod(ITypeSymbol targetType, string methodName)
         {
-            var sourceMethodAccessor = SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, (ExpressionSyntax)sourceGlobalAccessor, SyntaxFactory.IdentifierName(methodName));
+            var sourceMethodAccessor = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, isGlobalAccessorNullable, methodName);
             return new MappingElement()
             {
                 Expression = (ExpressionSyntax) generator.InvocationExpression(sourceMethodAccessor),
-                ExpressionType = targetType
+                ExpressionType = new AnnotatedType()
+                {
+                    CanBeNull = isGlobalAccessorNullable,
+                    Type = targetType
+                }
             };
         }
 
@@ -84,13 +99,17 @@ namespace MappingGenerator.Mappings.SourceFinders
             {
                 return new MappingElement()
                 {
-                    Expression = SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, (ExpressionSyntax)sourceGlobalAccessor, SyntaxFactory.IdentifierName(matchedSourceProperty.Name)),
-                    ExpressionType = matchedSourceProperty.Type
+                    Expression = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, isGlobalAccessorNullable, matchedSourceProperty.Name),
+                    ExpressionType = new AnnotatedType()
+                    {
+                        Type = matchedSourceProperty.Type,
+                        CanBeNull = isGlobalAccessorNullable || matchedSourceProperty.CanBeNull
+                    }
                 };
             }
 
             //Non-direct (mapping like y.UserName = x.User.Name)
-            var source = FindSubPropertySource(targetName, sourceType, sourceProperties.Value, sourceGlobalAccessor, mappingContext);
+            var source = FindSubPropertySource(targetName, sourceType, sourceProperties.Value, sourceGlobalAccessor, mappingContext, isGlobalAccessorNullable);
             if (source != null)
             {
                 return source;
@@ -100,13 +119,15 @@ namespace MappingGenerator.Mappings.SourceFinders
             var matchedSourceMethod = sourceMethods.Value.Where((x => x.Name.EndsWith(targetName, StringComparison.OrdinalIgnoreCase))).FirstOrDefault(m => mappingContext.AccessibilityHelper.IsSymbolAccessible(m, accessedVia));
             if (matchedSourceMethod != null)
             {
-                
-
-                var sourceMethodAccessor = SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, (ExpressionSyntax)sourceGlobalAccessor, SyntaxFactory.IdentifierName(matchedSourceMethod.Name));
+                var sourceMethodAccessor = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, isGlobalAccessorNullable, matchedSourceMethod.Name);
                 return new MappingElement()
                 {
                     Expression = (ExpressionSyntax) generator.InvocationExpression(sourceMethodAccessor),
-                    ExpressionType = matchedSourceMethod.ReturnType
+                    ExpressionType = new AnnotatedType()
+                    {
+                        Type = matchedSourceMethod.ReturnType,
+                        CanBeNull = isGlobalAccessorNullable || matchedSourceMethod.CanBeNull()
+                    }
                 };
             }
 
@@ -132,9 +153,7 @@ namespace MappingGenerator.Mappings.SourceFinders
             return new string(capitalLetters);
         }
 
-        private MappingElement FindSubPropertySource(string targetName, ITypeSymbol containingType,
-            IEnumerable<IObjectField> properties, SyntaxNode currentAccessor, MappingContext mappingContext,
-            string prefix = null)
+        private MappingElement FindSubPropertySource(string targetName, ITypeSymbol containingType, IEnumerable<IObjectField> properties, SyntaxNode currentAccessor, MappingContext mappingContext, bool isCurrentAccessorNullable,  string prefix = null)
         {
             if (ObjectHelper.IsSimpleType(containingType))
             {
@@ -146,18 +165,39 @@ namespace MappingGenerator.Mappings.SourceFinders
             if (subProperty != null)
             {
                 var currentNamePart = $"{prefix}{subProperty.Name}";
-                var subPropertyAccessor = (ExpressionSyntax) generator.MemberAccessExpression(currentAccessor, subProperty.Name);
+                var subPropertyAccessor = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)currentAccessor, isCurrentAccessorNullable, subProperty.Name);
+                var expressionCanBeNull = isCurrentAccessorNullable || subProperty.CanBeNull;
                 if (targetName.Equals(currentNamePart, StringComparison.OrdinalIgnoreCase))
                 {
-                    return new MappingElement()
+                    
+                    return new MappingElement
                     {
                         Expression = subPropertyAccessor,
-                        ExpressionType = subProperty.Type
+                        ExpressionType = new AnnotatedType()
+                        {
+                            CanBeNull = expressionCanBeNull,
+                            Type = subProperty.Type
+                        }
                     };
                 }
-                return FindSubPropertySource(targetName, subProperty.Type, subProperty.Type.GetObjectFields(),  subPropertyAccessor, mappingContext, currentNamePart);
+                return FindSubPropertySource(targetName, subProperty.Type, subProperty.Type.GetObjectFields(),  subPropertyAccessor, mappingContext, expressionCanBeNull,  currentNamePart);
             }
             return null;
         }
     }
+
+
+    public static class NullableExtensions
+    {
+        public static bool CanBeNull(this IMethodSymbol methodSymbol) => throw new NotImplementedException();
+        public static bool CanBeNull(this IParameterSymbol methodSymbol) => throw new NotImplementedException();
+        public static bool CanBeNull(this IPropertySymbol methodSymbol) => throw new NotImplementedException();
+        public static bool CanBeNull(this IFieldSymbol methodSymbol) => throw new NotImplementedException();
+        public static bool ElementCanBeNull(this IArrayTypeSymbol methodSymbol) => throw new NotImplementedException();
+        public static bool TypeParameterCanBeNull(this ITypeSymbol methodSymbol, int index) => throw new NotImplementedException();
+        public static AnnotatedType GetAnnotatedType(this TypeInfo typeInfo) => new AnnotatedType(){Type = typeInfo.Type};
+        public static AnnotatedType GetAnnotatedTypeForConverted(this TypeInfo typeInfo) => new AnnotatedType(){Type = typeInfo.ConvertedType};
+    }
+
+
 }

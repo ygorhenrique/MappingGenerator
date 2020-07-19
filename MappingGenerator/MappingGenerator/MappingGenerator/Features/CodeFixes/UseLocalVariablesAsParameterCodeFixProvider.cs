@@ -126,7 +126,8 @@ namespace MappingGenerator.Features.CodeFixes
                 return document;
             }
 
-            var sourceElementType = ((INamedTypeSymbol)mappingOverload.Parameters[0].Type).TypeArguments[0];
+            var parameterType = ((INamedTypeSymbol)mappingOverload.Parameters[0].Type);
+            var sourceElementType = parameterType.TypeArguments[0];
             var targetElementType = GetExpressionType(semanticModel, invocation);
             if (targetElementType == null)
             {
@@ -134,7 +135,8 @@ namespace MappingGenerator.Features.CodeFixes
             }
             
             var mappingEngine = new MappingEngine(semanticModel, syntaxGenerator);
-            var mappingLambda = mappingEngine.CreateMappingLambda("x", sourceElementType, targetElementType, new MappingPath(), new MappingContext(invocation, semanticModel));
+            var sourceListElementType = new AnnotatedType(){Type = sourceElementType, CanBeNull = parameterType.TypeParameterCanBeNull(1)};
+            var mappingLambda = mappingEngine.CreateMappingLambda("x", sourceListElementType, targetElementType, new MappingPath(), new MappingContext(invocation, semanticModel));
             return await document.ReplaceNodes(invocation, invocation.WithArgumentList(SyntaxFactory.ArgumentList().AddArguments(SyntaxFactory.Argument((ExpressionSyntax)mappingLambda))), cancellationToken);
         }
 

@@ -1,5 +1,7 @@
+using System;
 using System.Linq;
 using MappingGenerator.Mappings;
+using MappingGenerator.Mappings.SourceFinders;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -9,15 +11,18 @@ namespace MappingGenerator.RoslynHelpers
     public class ObjectProperty : IObjectField
     {
         private readonly IPropertySymbol property;
+        private readonly Lazy<bool> _lazyCanBeNull;
 
         public ObjectProperty(IPropertySymbol property)
         {
             this.property = property;
+            this._lazyCanBeNull = new Lazy<bool>(property.CanBeNull);
         }
 
         public string Name => property.Name;
 
         public ITypeSymbol Type => property.Type;
+        public bool CanBeNull => _lazyCanBeNull.Value;
 
         public bool CanBeSet(ITypeSymbol via, MappingContext mappingContext)
         {

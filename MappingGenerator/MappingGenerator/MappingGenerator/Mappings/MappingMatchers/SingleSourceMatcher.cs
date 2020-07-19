@@ -21,21 +21,24 @@ namespace MappingGenerator.Mappings.MappingMatchers
         public IReadOnlyList<MappingMatch> MatchAll(IReadOnlyCollection<IObjectField> targets,
             SyntaxGenerator syntaxGenerator, MappingContext mappingContext, SyntaxNode globalTargetAccessor = null)
         {
-            return targets.Select(property => new MappingMatch
+            return targets.Select(target => new MappingMatch
                 {
-                    Source = sourceFinder.FindMappingSource(property.Name, property.Type, mappingContext),
-                    Target = CreateTargetElement(globalTargetAccessor, property, syntaxGenerator)
+                    Source = sourceFinder.FindMappingSource(target.Name, new AnnotatedType(){Type = target.Type , CanBeNull = target.CanBeNull}, mappingContext),
+                    Target = CreateTargetElement(globalTargetAccessor, target, syntaxGenerator)
                 })
                 .Where(x => x.Source != null).ToList();
         }
 
-        private MappingElement CreateTargetElement(SyntaxNode globalTargetAccessor, IObjectField property,
-            SyntaxGenerator syntaxGenerator)
+        private MappingElement CreateTargetElement(SyntaxNode globalTargetAccessor, IObjectField target, SyntaxGenerator syntaxGenerator)
         {
-            return new MappingElement()
+            return new MappingElement
             {
-                Expression = (ExpressionSyntax)CreateAccessPropertyExpression(globalTargetAccessor, property, syntaxGenerator),
-                ExpressionType = property.Type
+                Expression = (ExpressionSyntax)CreateAccessPropertyExpression(globalTargetAccessor, target, syntaxGenerator),
+                ExpressionType = new AnnotatedType()
+                {
+                    CanBeNull = target.CanBeNull,
+                    Type = target.Type
+                }
             };
         }
 
