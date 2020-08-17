@@ -26,27 +26,25 @@ namespace MappingGenerator.Mappings.SourceFinders
 
     public class ObjectMembersMappingSourceFinder : IMappingSourceFinder
     {
-        private readonly ITypeSymbol sourceType;
+        private readonly AnnotatedType sourceType;
         private readonly SyntaxNode sourceGlobalAccessor;
         private readonly SyntaxGenerator generator;
-        private readonly bool isGlobalAccessorNullable;
         private readonly Lazy<IReadOnlyList<IObjectField>> sourceProperties;
         private readonly Lazy<IReadOnlyList<IMethodSymbol>> sourceMethods;
         private readonly string potentialPrefix;
         private readonly Lazy<bool> isSourceTypeEnumerable;
 
 
-        public ObjectMembersMappingSourceFinder(ITypeSymbol sourceType, SyntaxNode sourceGlobalAccessor, SyntaxGenerator generator, bool isGlobalAccessorNullable)
+        public ObjectMembersMappingSourceFinder(AnnotatedType sourceType, SyntaxNode sourceGlobalAccessor, SyntaxGenerator generator)
         {
             this.sourceType = sourceType;
             this.sourceGlobalAccessor = sourceGlobalAccessor;
             this.generator = generator;
-            this.isGlobalAccessorNullable = isGlobalAccessorNullable;
             this.potentialPrefix = NameHelper.ToLocalVariableName(sourceGlobalAccessor.ToFullString());
-            var sourceAllMembers = sourceType.GetAllMembers();
+            var sourceAllMembers = sourceType.Type.GetAllMembers();
             this.sourceProperties = new Lazy<IReadOnlyList<IObjectField>>(() =>ObjectFieldExtensions.GetObjectFields(sourceAllMembers).ToList());
             this.sourceMethods = new Lazy<IReadOnlyList<IMethodSymbol>>(()=> ObjectHelper.GetWithGetPrefixMethods(sourceAllMembers).ToList());
-            this.isSourceTypeEnumerable = new Lazy<bool>(() => sourceType.Interfaces.Any(x => x.ToDisplayString().StartsWith("System.Collections.Generic.IEnumerable<")));
+            this.isSourceTypeEnumerable = new Lazy<bool>(() => sourceType.Type.Interfaces.Any(x => x.ToDisplayString().StartsWith("System.Collections.Generic.IEnumerable<")));
         }
 
         public MappingElement FindMappingSource(string targetName, AnnotatedType targetType, MappingContext mappingContext)
@@ -76,58 +74,46 @@ namespace MappingGenerator.Mappings.SourceFinders
 
         private MappingElement CreateMappingElementFromExtensionMethod(ITypeSymbol targetType, string methodName)
         {
-            var sourceMethodAccessor = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, isGlobalAccessorNullable, methodName);
+            var sourceMethodAccessor = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, sourceType.CanBeNull, methodName);
             return new MappingElement()
             {
                 Expression = (ExpressionSyntax) generator.InvocationExpression(sourceMethodAccessor),
-                ExpressionType = new AnnotatedType()
-                {
-                    CanBeNull = isGlobalAccessorNullable,
-                    Type = targetType
-                }
+                ExpressionType = new AnnotatedType(targetType)
             };
         }
 
-        private MappingElement TryFindSource(string targetName, MappingContext mappingContext, ITypeSymbol accessedVia)
+        private MappingElement TryFindSource(string targetName, MappingContext mappingContext, AnnotatedType accessedVia)
         {
             //Direct 1-1 mapping
             var matchedSourceProperty = sourceProperties.Value
                 .Where(x => x.Name.Equals(targetName, StringComparison.OrdinalIgnoreCase) || $"{potentialPrefix}{x.Name}".Equals(targetName, StringComparison.OrdinalIgnoreCase))
-                .FirstOrDefault(p => p.CanBeGet(accessedVia, mappingContext));
+                .FirstOrDefault(p => p.CanBeGet(accessedVia.Type, mappingContext));
 
             if (matchedSourceProperty != null)
             {
                 return new MappingElement()
                 {
-                    Expression = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, isGlobalAccessorNullable, matchedSourceProperty.Name),
-                    ExpressionType = new AnnotatedType()
-                    {
-                        Type = matchedSourceProperty.Type,
-                        CanBeNull = isGlobalAccessorNullable || matchedSourceProperty.CanBeNull
-                    }
+                    Expression = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, accessedVia.CanBeNull, matchedSourceProperty.Name),
+                    ExpressionType = new AnnotatedType(matchedSourceProperty.Type.Type, accessedVia.CanBeNull || matchedSourceProperty.Type.CanBeNull)
                 };
             }
 
             //Non-direct (mapping like y.UserName = x.User.Name)
-            var source = FindSubPropertySource(targetName, sourceType, sourceProperties.Value, sourceGlobalAccessor, mappingContext, isGlobalAccessorNullable);
+            var source = FindSubPropertySource(targetName, sourceType.Type, sourceProperties.Value, sourceGlobalAccessor, mappingContext, accessedVia.CanBeNull);
             if (source != null)
             {
                 return source;
             }
 
             //Flattening with function eg. t.Total = s.GetTotal()
-            var matchedSourceMethod = sourceMethods.Value.Where((x => x.Name.EndsWith(targetName, StringComparison.OrdinalIgnoreCase))).FirstOrDefault(m => mappingContext.AccessibilityHelper.IsSymbolAccessible(m, accessedVia));
+            var matchedSourceMethod = sourceMethods.Value.Where((x => x.Name.EndsWith(targetName, StringComparison.OrdinalIgnoreCase))).FirstOrDefault(m => mappingContext.AccessibilityHelper.IsSymbolAccessible(m, accessedVia.Type));
             if (matchedSourceMethod != null)
             {
-                var sourceMethodAccessor = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, isGlobalAccessorNullable, matchedSourceMethod.Name);
+                var sourceMethodAccessor = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)sourceGlobalAccessor, sourceType.CanBeNull, matchedSourceMethod.Name);
                 return new MappingElement()
                 {
                     Expression = (ExpressionSyntax) generator.InvocationExpression(sourceMethodAccessor),
-                    ExpressionType = new AnnotatedType()
-                    {
-                        Type = matchedSourceMethod.ReturnType,
-                        CanBeNull = isGlobalAccessorNullable || matchedSourceMethod.CanBeNull()
-                    }
+                    ExpressionType = new AnnotatedType(matchedSourceMethod.ReturnType, sourceType.CanBeNull || matchedSourceMethod.CanBeNull())
                 };
             }
 
@@ -166,21 +152,17 @@ namespace MappingGenerator.Mappings.SourceFinders
             {
                 var currentNamePart = $"{prefix}{subProperty.Name}";
                 var subPropertyAccessor = SyntaxFactoryExtensions.CreateMemberAccessExpression((ExpressionSyntax)currentAccessor, isCurrentAccessorNullable, subProperty.Name);
-                var expressionCanBeNull = isCurrentAccessorNullable || subProperty.CanBeNull;
+                var expressionCanBeNull = isCurrentAccessorNullable || subProperty.Type.CanBeNull;
                 if (targetName.Equals(currentNamePart, StringComparison.OrdinalIgnoreCase))
                 {
                     
                     return new MappingElement
                     {
                         Expression = subPropertyAccessor,
-                        ExpressionType = new AnnotatedType()
-                        {
-                            CanBeNull = expressionCanBeNull,
-                            Type = subProperty.Type
-                        }
+                        ExpressionType = new AnnotatedType(subProperty.Type.Type, expressionCanBeNull)
                     };
                 }
-                return FindSubPropertySource(targetName, subProperty.Type, subProperty.Type.GetObjectFields(),  subPropertyAccessor, mappingContext, expressionCanBeNull,  currentNamePart);
+                return FindSubPropertySource(targetName, subProperty.Type.Type, subProperty.Type.Type.GetObjectFields(),  subPropertyAccessor, mappingContext, expressionCanBeNull,  currentNamePart);
             }
             return null;
         }
@@ -189,14 +171,12 @@ namespace MappingGenerator.Mappings.SourceFinders
 
     public static class NullableExtensions
     {
-        public static bool CanBeNull(this IMethodSymbol methodSymbol) => throw new NotImplementedException();
-        public static bool CanBeNull(this IParameterSymbol methodSymbol) => throw new NotImplementedException();
-        public static bool CanBeNull(this IPropertySymbol methodSymbol) => throw new NotImplementedException();
-        public static bool CanBeNull(this IFieldSymbol methodSymbol) => throw new NotImplementedException();
-        public static bool ElementCanBeNull(this IArrayTypeSymbol methodSymbol) => throw new NotImplementedException();
-        public static bool TypeParameterCanBeNull(this ITypeSymbol methodSymbol, int index) => throw new NotImplementedException();
-        public static AnnotatedType GetAnnotatedType(this TypeInfo typeInfo) => new AnnotatedType(){Type = typeInfo.Type};
-        public static AnnotatedType GetAnnotatedTypeForConverted(this TypeInfo typeInfo) => new AnnotatedType(){Type = typeInfo.ConvertedType};
+        public static bool CanBeNull(this IMethodSymbol methodSymbol) => methodSymbol.ReturnType.CanBeNull();
+        public static bool CanBeNull(this IPropertySymbol propertySymbol) => propertySymbol.Type.CanBeNull();
+        public static bool CanBeNull(this IFieldSymbol fieldSymbol) => fieldSymbol.CanBeNull();
+        public static bool CanBeNull(this ITypeSymbol typeSymbol) => typeSymbol.NullableAnnotation == NullableAnnotation.Annotated;
+        public static AnnotatedType GetAnnotatedType(this TypeInfo typeInfo) => new AnnotatedType(typeInfo.Type);
+        public static AnnotatedType GetAnnotatedTypeForConverted(this TypeInfo typeInfo) => new AnnotatedType(typeInfo.ConvertedType);
     }
 
 

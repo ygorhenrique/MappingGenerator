@@ -17,8 +17,20 @@ namespace MappingGenerator.Mappings
 
     public class AnnotatedType
     {
-        public ITypeSymbol Type { get; set; }
-        public bool CanBeNull { get; set; }
+        public ITypeSymbol Type { get; }
+        public bool CanBeNull { get; }
+
+        public AnnotatedType(ITypeSymbol type)
+        {
+            Type = type;
+            CanBeNull = type.CanBeNull();
+        }
+
+        public AnnotatedType(ITypeSymbol type, bool canBeNull)
+        {
+            Type = type;
+            CanBeNull = canBeNull;
+        }
     }
 
     public class MappingEngine
@@ -113,11 +125,7 @@ namespace MappingGenerator.Mappings
                 source = new MappingElement()
                 {
                     Expression =  (ExpressionSyntax)syntaxGenerator.MemberAccessExpression(source.Expression, "Value"),
-                    ExpressionType = new AnnotatedType()
-                    {
-                        Type = underlyingType,
-                        CanBeNull = false
-                    }
+                    ExpressionType = new AnnotatedType(underlyingType, false)
                 };
             }
 
@@ -142,7 +150,7 @@ namespace MappingGenerator.Mappings
         protected virtual MappingElement TryToCreateMappingExpression(MappingElement source, AnnotatedType targetType, MappingPath mappingPath, MappingContext mappingContext)
         {
             //TODO: If source expression is method or constructor invocation then we should extract local variable and use it im mappings as a reference
-            var namedTargetType = targetType as INamedTypeSymbol;
+            var namedTargetType = targetType.Type as INamedTypeSymbol;
             
             if (namedTargetType != null)
             {
@@ -153,11 +161,7 @@ namespace MappingGenerator.Mappings
                     var creationExpression = syntaxGenerator.ObjectCreationExpression(targetType.Type, constructorParameters.Arguments);
                     return new MappingElement()
                     {
-                        ExpressionType = new AnnotatedType()
-                        {
-                            CanBeNull = false,
-                            Type = targetType.Type
-                        },
+                        ExpressionType = targetType,
                         Expression = (ExpressionSyntax) creationExpression,
                     };
                 }
@@ -172,7 +176,7 @@ namespace MappingGenerator.Mappings
                 };
             }
 
-            var subMappingSourceFinder = new ObjectMembersMappingSourceFinder(source.ExpressionType.Type, source.Expression, syntaxGenerator, source.ExpressionType.CanBeNull);
+            var subMappingSourceFinder = new ObjectMembersMappingSourceFinder(source.ExpressionType, source.Expression, syntaxGenerator);
 
             if (namedTargetType != null)
             {
@@ -191,12 +195,8 @@ namespace MappingGenerator.Mappings
                     var mappingMatcher = new SingleSourceMatcher(restSourceFinder);
                     return new MappingElement()
                     {
-                        ExpressionType = new AnnotatedType()
-                        {
-                            CanBeNull = false,
-                            Type = targetType.Type
-                        },
-                        Expression =   AddInitializerWithMapping(creationExpression, mappingMatcher, targetType.Type, mappingContext, mappingPath),
+                        ExpressionType = new AnnotatedType(targetType.Type),
+                        Expression = AddInitializerWithMapping(creationExpression, mappingMatcher, targetType.Type, mappingContext, mappingPath),
                     };
                 }
             }
@@ -206,11 +206,7 @@ namespace MappingGenerator.Mappings
             var subMappingMatcher = new SingleSourceMatcher(subMappingSourceFinder);
             return new MappingElement()
             {
-                ExpressionType = new AnnotatedType()
-                {
-                    CanBeNull = false,
-                    Type = targetType.Type
-                },
+                ExpressionType = new AnnotatedType(targetType.Type),
                 Expression = AddInitializerWithMapping(objectCreationExpressionSyntax, subMappingMatcher, targetType.Type, mappingContext, mappingPath),
             };
         }
@@ -278,11 +274,7 @@ namespace MappingGenerator.Mappings
                     return new MappingElement()
                     {
                         Expression = (ExpressionSyntax) syntaxGenerator.MemberAccessExpression(sourceAccess, wrapper.UnwrappingObjectField.Name),
-                        ExpressionType = new AnnotatedType()
-                        {
-                            Type = wrapper.UnwrappingObjectField.Type,
-                            CanBeNull = wrapper.UnwrappingObjectField.CanBeNull
-                        }
+                        ExpressionType = wrapper.UnwrappingObjectField.Type
                     };
                 }
                 if (wrapper.Type == WrapperInfoType.Method)
@@ -292,11 +284,7 @@ namespace MappingGenerator.Mappings
                     return new MappingElement()
                     {
                         Expression = (InvocationExpressionSyntax) syntaxGenerator.InvocationExpression(unwrappingMethodAccess),
-                        ExpressionType = new AnnotatedType()
-                        {
-                            Type = wrapper.UnwrappingMethod.ReturnType,
-                            CanBeNull = wrapper.UnwrappingMethod.CanBeNull()
-                        }
+                        ExpressionType = new AnnotatedType(wrapper.UnwrappingMethod.ReturnType)
                     };
                 }
 

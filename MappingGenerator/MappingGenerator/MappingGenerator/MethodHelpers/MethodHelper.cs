@@ -26,7 +26,7 @@ namespace MappingGenerator.MethodHelpers
             var matchedArgumentList = new MatchedParameterList();
             foreach (var parameter in parameters)
             {
-                var mappingSource = mappingSourceFinder.FindMappingSource(parameter.Name, new AnnotatedType(){Type = parameter.Type , CanBeNull = parameter.CanBeNull()}, mappingContext);
+                var mappingSource = mappingSourceFinder.FindMappingSource(parameter.Name, new AnnotatedType(parameter.Type), mappingContext);
                 matchedArgumentList.AddMatch(parameter, mappingSource);
             }
             return matchedArgumentList;

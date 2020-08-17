@@ -18,15 +18,8 @@ namespace MappingGenerator.Mappings.MappingImplementors
         {
             var cloneMappingEngine = new CloneMappingEngine(semanticModel, generator);
             var sourceParameter = methodSymbol.Parameters[0];
-            var sourceType = new AnnotatedType(){
-                CanBeNull = sourceParameter.CanBeNull(),
-                Type = sourceParameter.Type
-            };
-            var targetType = new AnnotatedType()
-            {
-                Type = methodSymbol.ReturnType,
-                CanBeNull = methodSymbol.CanBeNull()
-            };
+            var sourceType = new AnnotatedType(sourceParameter.Type);
+            var targetType = new AnnotatedType(methodSymbol.ReturnType);
             var newExpression = cloneMappingEngine.MapExpression((ExpressionSyntax)generator.IdentifierName(sourceParameter.Name), sourceType, targetType, mappingContext);
             return new[] { generator.ReturnStatement(newExpression).WithAdditionalAnnotations(Formatter.Annotation) };
         }

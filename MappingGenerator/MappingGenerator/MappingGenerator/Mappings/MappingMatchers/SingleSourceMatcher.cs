@@ -23,7 +23,7 @@ namespace MappingGenerator.Mappings.MappingMatchers
         {
             return targets.Select(target => new MappingMatch
                 {
-                    Source = sourceFinder.FindMappingSource(target.Name, new AnnotatedType(){Type = target.Type , CanBeNull = target.CanBeNull}, mappingContext),
+                    Source = sourceFinder.FindMappingSource(target.Name, target.Type, mappingContext),
                     Target = CreateTargetElement(globalTargetAccessor, target, syntaxGenerator)
                 })
                 .Where(x => x.Source != null).ToList();
@@ -34,11 +34,7 @@ namespace MappingGenerator.Mappings.MappingMatchers
             return new MappingElement
             {
                 Expression = (ExpressionSyntax)CreateAccessPropertyExpression(globalTargetAccessor, target, syntaxGenerator),
-                ExpressionType = new AnnotatedType()
-                {
-                    CanBeNull = target.CanBeNull,
-                    Type = target.Type
-                }
+                ExpressionType = target.Type
             };
         }
 

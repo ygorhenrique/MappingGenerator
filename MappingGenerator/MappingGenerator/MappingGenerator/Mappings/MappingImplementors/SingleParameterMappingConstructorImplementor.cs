@@ -19,7 +19,7 @@ namespace MappingGenerator.Mappings.MappingImplementors
         {
             var mappingEngine = new MappingEngine(semanticModel, generator);
             var sourceParameter = methodSymbol.Parameters[0];
-            var sourceFinder = new ObjectMembersMappingSourceFinder(sourceParameter.Type, generator.IdentifierName(sourceParameter.Name), generator, sourceParameter.CanBeNull());
+            var sourceFinder = new ObjectMembersMappingSourceFinder(new AnnotatedType(sourceParameter.Type), generator.IdentifierName(sourceParameter.Name), generator);
             var targets = MappingTargetHelper.GetFieldsThaCanBeSetFromConstructor(methodSymbol.ContainingType, mappingContext);
             return mappingEngine.MapUsingSimpleAssignment(targets, new SingleSourceMatcher(sourceFinder), mappingContext);
         }

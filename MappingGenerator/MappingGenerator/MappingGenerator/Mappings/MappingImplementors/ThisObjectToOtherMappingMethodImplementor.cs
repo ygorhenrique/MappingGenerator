@@ -22,8 +22,8 @@ namespace MappingGenerator.Mappings.MappingImplementors
             SemanticModel semanticModel, MappingContext mappingContext)
         {
             var mappingEngine = new MappingEngine(semanticModel, generator);
-            var destinationType = new AnnotatedType{Type = methodSymbol.ReturnType, CanBeNull = methodSymbol.CanBeNull()};
-            var sourceType = new AnnotatedType{ Type = methodSymbol.ContainingType , CanBeNull = false };
+            var destinationType = new AnnotatedType(methodSymbol.ReturnType);
+            var sourceType = new AnnotatedType(methodSymbol.ContainingType);
             var newExpression = mappingEngine.MapExpression((ExpressionSyntax)generator.ThisExpression(), sourceType, destinationType, mappingContext);
             return new[] { generator.ReturnStatement(newExpression).WithAdditionalAnnotations(Formatter.Annotation) };
         }

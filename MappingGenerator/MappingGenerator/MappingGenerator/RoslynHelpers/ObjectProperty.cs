@@ -11,18 +11,16 @@ namespace MappingGenerator.RoslynHelpers
     public class ObjectProperty : IObjectField
     {
         private readonly IPropertySymbol property;
-        private readonly Lazy<bool> _lazyCanBeNull;
 
         public ObjectProperty(IPropertySymbol property)
         {
             this.property = property;
-            this._lazyCanBeNull = new Lazy<bool>(property.CanBeNull);
+            Type = new AnnotatedType(property.Type);
         }
 
         public string Name => property.Name;
 
-        public ITypeSymbol Type => property.Type;
-        public bool CanBeNull => _lazyCanBeNull.Value;
+        public AnnotatedType Type { get; }
 
         public bool CanBeSet(ITypeSymbol via, MappingContext mappingContext)
         {

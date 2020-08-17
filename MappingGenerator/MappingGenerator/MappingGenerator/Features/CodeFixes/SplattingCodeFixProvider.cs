@@ -98,7 +98,7 @@ namespace MappingGenerator.Features.CodeFixes
         {
             var invalidArgument = invalidArgumentList.Arguments.First();
             var sourceType = semanticModel.GetTypeInfo(invalidArgument.Expression).GetAnnotatedType();
-            return new ObjectMembersMappingSourceFinder(sourceType.Type, invalidArgument.Expression, syntaxGenerator, sourceType.CanBeNull);
+            return new ObjectMembersMappingSourceFinder(new AnnotatedType(sourceType.Type), invalidArgument.Expression, syntaxGenerator);
         }
     }
 }

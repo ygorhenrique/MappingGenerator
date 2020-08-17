@@ -8,19 +8,16 @@ namespace MappingGenerator.RoslynHelpers
     public class ObjectField : IObjectField
     {
         private readonly IFieldSymbol fieldSymbol;
-        private readonly Lazy<bool> _lazyCanBeNull;
 
         public ObjectField(IFieldSymbol fieldSymbol)
         {
             this.fieldSymbol = fieldSymbol;
-            this._lazyCanBeNull = new Lazy<bool>(fieldSymbol.CanBeNull);
-
+            this.Type = new AnnotatedType(fieldSymbol.Type);
         }
 
         public string Name => fieldSymbol.Name;
 
-        public ITypeSymbol Type => fieldSymbol.Type;
-        public bool CanBeNull => _lazyCanBeNull.Value;
+        public AnnotatedType Type { get; }
 
         public bool CanBeSet(ITypeSymbol via, MappingContext mappingContext)
         {

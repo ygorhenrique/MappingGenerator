@@ -34,32 +34,20 @@ namespace MappingGenerator.Mappings
                             var indexer = namedType.GetMembers(WellKnownMemberNames.Indexer).OfType<IPropertySymbol>().FirstOrDefault();
                             if (indexer != null)
                             {
-                               return  new AnnotatedType()
-                               {
-                                   Type = indexer.Type,
-                                   CanBeNull = indexer.CanBeNull()
-                               };
+                               return  new AnnotatedType(indexer.Type);
                             }
 
                             throw new NotSupportedException("Cannot determine collection element type");
                         }
                         if (ObjectHelper.IsSystemObject(namedType.BaseType))
                         {
-                            return new AnnotatedType(){Type = namedType.BaseType , CanBeNull = true};
+                            return new AnnotatedType(namedType.BaseType);
                         }
                         return GetElementType(namedType.BaseType);
                     }
-                    return new AnnotatedType()
-                    {
-                        Type = namedType.TypeArguments[0],
-                        CanBeNull = namedType.TypeParameterCanBeNull(1)
-                    };
+                    return new AnnotatedType(namedType.TypeArguments[0]);
                 case IArrayTypeSymbol arrayType:
-                    return new AnnotatedType()
-                    {
-                        Type = arrayType.ElementType,
-                        CanBeNull = arrayType.ElementCanBeNull()
-                    };
+                    return new AnnotatedType(arrayType.ElementType);
                 default:
                     throw new NotSupportedException("Unknown collection type");
             }

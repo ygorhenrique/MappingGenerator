@@ -74,7 +74,7 @@ namespace MappingGenerator.Features.CodeFixes
         {
             var (mappingEngine, semanticModel) = await CreateMappingEngine(document, returnStatement, cancellationToken);
             var returnExpressionTypeInfo = mappingEngine.GetExpressionTypeInfo(returnStatement.Expression);
-            var mappingExpression = mappingEngine.MapExpression(returnStatement.Expression.WithoutTrivia(), returnExpressionTypeInfo.GetAnnotatedType(), returnExpressionTypeInfo.GetAnnotatedTypeForConverted(), new MappingContext(returnStatement, semanticModel)); 
+            var mappingExpression = mappingEngine.MapExpression(returnStatement.Expression!.WithoutTrivia(), returnExpressionTypeInfo.GetAnnotatedType(), returnExpressionTypeInfo.GetAnnotatedTypeForConverted(), new MappingContext(returnStatement, semanticModel)); 
             return await ReplaceNode(document, returnStatement, returnStatement.WithExpression(mappingExpression), cancellationToken);
         }
 
@@ -82,14 +82,14 @@ namespace MappingGenerator.Features.CodeFixes
         {
             var (mappingEngine, semanticModel) = await CreateMappingEngine(document, yieldStatement, cancellationToken);
             var returnExpressionTypeInfo = mappingEngine.GetExpressionTypeInfo(yieldStatement.Expression);
-            var mappingExpression = mappingEngine.MapExpression(yieldStatement.Expression.WithoutTrivia(), returnExpressionTypeInfo.GetAnnotatedType(), returnExpressionTypeInfo.GetAnnotatedTypeForConverted(), new MappingContext(yieldStatement, semanticModel)); 
+            var mappingExpression = mappingEngine.MapExpression(yieldStatement.Expression!.WithoutTrivia(), returnExpressionTypeInfo.GetAnnotatedType(), returnExpressionTypeInfo.GetAnnotatedTypeForConverted(), new MappingContext(yieldStatement, semanticModel)); 
             return await ReplaceNode(document, yieldStatement, yieldStatement.WithExpression(mappingExpression), cancellationToken);
         }
 
         private static async Task<Document> ReplaceNode(Document document, SyntaxNode oldNode, SyntaxNode newNode, CancellationToken cancellationToken)
         {
             var root = await document.GetSyntaxRootAsync(cancellationToken);
-            var newRoot = root.ReplaceNode(oldNode, newNode);
+            var newRoot = root!.ReplaceNode(oldNode, newNode);
             return document.WithSyntaxRoot(newRoot);
         }
 

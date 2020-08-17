@@ -56,11 +56,7 @@ namespace MappingGenerator.MethodHelpers
                     return list;
                 }
 
-                var parameterType =new AnnotatedType()
-                {
-                    Type = match.Parameter.Type,
-                    CanBeNull = match.Parameter.CanBeNull()
-                };
+                var parameterType =new AnnotatedType(match.Parameter.Type);
                 var expression = mappingEngine.MapExpression(match.Source, parameterType, mappingContext)?.Expression ?? mappingEngine.CreateDefaultExpression(parameterType.Type);
                 var argument = generateNamedParameters
                     ? SyntaxFactory.Argument(SyntaxFactory.NameColon(match.Parameter.Name), SyntaxFactory.Token(SyntaxKind.None), expression)
